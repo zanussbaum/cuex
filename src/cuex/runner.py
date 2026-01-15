@@ -35,6 +35,7 @@ class GPUType(str, Enum):
     A10G = "A10G"
     A100 = "A100"
     H100 = "H100"
+    B200 = "B200"
 
 
 # Mapping from GPU type to CUDA compute capability
@@ -45,6 +46,7 @@ GPU_ARCH_FLAGS: dict[GPUType, list[str]] = {
     GPUType.A10G: ["-gencode", "arch=compute_86,code=sm_86"],  # Ampere
     GPUType.A100: ["-gencode", "arch=compute_80,code=sm_80"],  # Ampere
     GPUType.H100: ["-gencode", "arch=compute_90,code=sm_90"],  # Hopper
+    GPUType.B200: ["-gencode", "arch=compute_100,code=sm_100"],  # Blackwell
 }
 
 
@@ -129,6 +131,20 @@ def _run_with_h100(
     """Run code on H100 GPU."""
     return _compile_and_run_impl(
         source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.H100]
+    )
+
+
+@app.function(image=cuda_image, gpu="B200", timeout=300)
+def _run_with_b200(
+    source_code: str,
+    filename: str,
+    generate_asm: bool,
+    program_args: list[str],
+    data_files: dict[str, bytes],
+) -> dict[str, Any]:
+    """Run code on B200 GPU."""
+    return _compile_and_run_impl(
+        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.B200]
     )
 
 
@@ -367,6 +383,7 @@ def compile_and_run(
         GPUType.A10G: _run_with_a10g,
         GPUType.A100: _run_with_a100,
         GPUType.H100: _run_with_h100,
+        GPUType.B200: _run_with_b200,
     }
 
     run_func = gpu_functions[gpu_type]

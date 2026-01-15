@@ -118,7 +118,7 @@ def run(
         None,
         "--gpu",
         "-g",
-        help="GPU type: none, T4, L4, A10G, A100, H100 (auto-detected from extension if not specified)",
+        help="GPU type: none, T4, L4, A10G, A100, H100, B200 (auto-detected from extension if not specified)",
     ),
     timeout: int = typer.Option(
         300,
@@ -271,7 +271,7 @@ def diff(
         None,
         "--gpu",
         "-g",
-        help="GPU type: none, T4, L4, A10G, A100, H100 (auto-detected from extension if not specified)",
+        help="GPU type: none, T4, L4, A10G, A100, H100, B200 (auto-detected from extension if not specified)",
     ),
 ) -> None:
     """Show code diff between runs of a source file."""
