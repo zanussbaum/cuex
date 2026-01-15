@@ -101,7 +101,7 @@ def main(
 
 
 @app.command(
-    context_settings={"allow_interspersed_args": False},
+    context_settings={"allow_interspersed_args": True},
 )
 def run(
     source_file: Path = typer.Argument(
