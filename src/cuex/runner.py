@@ -16,10 +16,13 @@ console = Console()
 # Define the Modal app
 app = modal.App("cuex")
 
-# Define the CUDA image
+# Define the CUDA image with CUTLASS for tensor core development
 cuda_image = (
     modal.Image.from_registry("nvidia/cuda:12.9.0-devel-ubuntu22.04", add_python="3.11")
-    .apt_install("g++")
+    .apt_install("g++", "git")
+    .run_commands(
+        "git clone --depth 1 --branch v3.8.0 https://github.com/NVIDIA/cutlass.git /opt/cutlass"
+    )
     .uv_pip_install("rich")
 )
 
@@ -46,7 +49,7 @@ GPU_ARCH_FLAGS: dict[GPUType, list[str]] = {
     GPUType.A10G: ["-gencode", "arch=compute_86,code=sm_86"],  # Ampere
     GPUType.A100: ["-gencode", "arch=compute_80,code=sm_80"],  # Ampere
     GPUType.H100: ["-gencode", "arch=compute_90,code=sm_90"],  # Hopper
-    GPUType.B200: ["-gencode", "arch=compute_100,code=sm_100"],  # Blackwell
+    GPUType.B200: ["-gencode", "arch=compute_100a,code=sm_100a"],  # Blackwell (100a for tcgen05)
 }
 
 
@@ -220,6 +223,12 @@ def _compile_and_run_impl(
             # Auto-detect required CUDA libraries
             cuda_libs = detect_cuda_libraries(source_code)
 
+            # Check if CUTLASS headers are used
+            uses_cutlass = any(
+                inc in source_code
+                for inc in ["cute/", "cutlass/", "<cute", "<cutlass"]
+            )
+
             compile_cmd = [
                 "nvcc",
                 "-O3",
@@ -229,6 +238,14 @@ def _compile_and_run_impl(
                 "-Xptxas",
                 "-v",
             ]
+
+            # Add CUTLASS include paths if needed
+            if uses_cutlass:
+                compile_cmd.extend([
+                    "-I/opt/cutlass/include",
+                    "-I/opt/cutlass/tools/util/include",
+                ])
+
             if arch_flags:
                 compile_cmd.extend(arch_flags)
             compile_cmd.extend(["-o", str(binary_path), str(source_path)])
@@ -242,6 +259,11 @@ def _compile_and_run_impl(
                 "--expt-relaxed-constexpr",
                 "--std=c++20",
             ]
+            if uses_cutlass:
+                asm_cmd.extend([
+                    "-I/opt/cutlass/include",
+                    "-I/opt/cutlass/tools/util/include",
+                ])
             if arch_flags:
                 asm_cmd.extend(arch_flags)
             asm_cmd.extend(["-o", str(tmppath / "program.ptx"), str(source_path)])
