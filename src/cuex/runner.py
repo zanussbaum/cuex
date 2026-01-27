@@ -168,6 +168,7 @@ def _run_with_cpu(
 def detect_cuda_libraries(source_code: str) -> list[str]:
     """Auto-detect required CUDA libraries based on #include directives."""
     library_map = {
+        "cuda.h": "-lcuda",  # CUDA driver API (TMA, etc.)
         "cublas_v2.h": "-lcublas",
         "cublas.h": "-lcublas",
         "cublasLt.h": "-lcublasLt",
