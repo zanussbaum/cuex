@@ -1,6 +1,7 @@
 """CLI entry point for cuex."""
 
 import glob
+import re
 from pathlib import Path
 
 import typer
@@ -46,6 +47,78 @@ def collect_data_files(patterns: list[str], source_dir: Path) -> tuple[dict[str,
                 total_bytes += len(content)
 
     return data_files, total_bytes
+
+
+def collect_local_includes(
+    source_path: Path,
+    base_dir: Path | None = None,
+    seen: set[Path] | None = None,
+) -> dict[str, bytes]:
+    """Recursively collect local #include "..." dependencies.
+
+    Args:
+        source_path: Path to the source file to scan
+        base_dir: Base directory for computing relative paths (defaults to source_path.parent)
+        seen: Set of already-processed files (to avoid cycles)
+
+    Returns:
+        Dict of relative path -> file content (as bytes)
+
+    Raises:
+        typer.Exit: If an included file cannot be found
+    """
+    if seen is None:
+        seen = set()
+    if base_dir is None:
+        base_dir = source_path.parent.resolve()
+
+    source_path = source_path.resolve()
+    if source_path in seen:
+        return {}
+    seen.add(source_path)
+
+    includes: dict[str, bytes] = {}
+    content = source_path.read_text()
+
+    # Match #include "filename" (not <filename>)
+    # This regex handles optional whitespace and captures the path
+    include_pattern = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.MULTILINE)
+
+    for match in include_pattern.finditer(content):
+        include_name = match.group(1)
+
+        # Resolve relative to the file containing the include
+        include_path = (source_path.parent / include_name).resolve()
+
+        if not include_path.exists():
+            console.print(f"[red]Error:[/red] Cannot find included file: {include_name}")
+            console.print(f"  Referenced from: {source_path}")
+            console.print(f"  Looked for: {include_path}")
+            raise typer.Exit(1)
+
+        if include_path in seen:
+            continue
+
+        # Compute path relative to base_dir
+        try:
+            rel_path = include_path.relative_to(base_dir)
+        except ValueError:
+            # File is outside base_dir (e.g., ../common/header.h)
+            console.print(
+                f"[red]Error:[/red] Included file is outside source directory: {include_name}"
+            )
+            console.print(f"  Source dir: {base_dir}")
+            console.print(f"  Include path: {include_path}")
+            console.print("  Hint: Move shared headers into the source directory")
+            raise typer.Exit(1)
+
+        includes[str(rel_path)] = include_path.read_bytes()
+
+        # Recursively collect includes from this file
+        nested = collect_local_includes(include_path, base_dir, seen)
+        includes.update(nested)
+
+    return includes
 
 
 def print_colored_diff(console: Console, diff_text: str) -> None:
@@ -158,23 +231,34 @@ def run(
 
     # Read source code
     source_code = source_file.read_text()
+    base_dir = source_file.parent.resolve()
+
+    # Collect local includes (headers referenced via #include "...")
+    include_files = collect_local_includes(source_file, base_dir)
 
     # Collect data files
     data_files: dict[str, bytes] = {}
+    data_bytes = 0
     if data:
-        base_dir = source_file.parent.resolve()
-        data_files, total_bytes = collect_data_files(data, base_dir)
+        data_files, data_bytes = collect_data_files(data, base_dir)
         if not data_files:
             console.print(f"[yellow]Warning:[/yellow] No files matched patterns: {data}")
+
+    # Merge includes and data files (includes take precedence if overlap)
+    all_files = {**data_files, **include_files}
 
     console.print(f"[blue]Source:[/blue] {source_file}")
     console.print(f"[blue]GPU:[/blue] {gpu_type.name}")
     console.print(f"[blue]Timeout:[/blue] {timeout}s")
     if asm:
         console.print("[blue]ASM output:[/blue] enabled")
+    if include_files:
+        console.print(f"[blue]Includes:[/blue] {len(include_files)} files")
+        for rel_path in sorted(include_files.keys()):
+            console.print(f"  [dim]{rel_path}[/dim]")
     if data_files:
         console.print(
-            f"[blue]Data files:[/blue] {len(data_files)} files ({total_bytes / 1024:.1f} KB)"
+            f"[blue]Data files:[/blue] {len(data_files)} files ({data_bytes / 1024:.1f} KB)"
         )
         for rel_path in sorted(data_files.keys()):
             console.print(f"  [dim]{rel_path}[/dim]")
@@ -209,7 +293,7 @@ def run(
             timeout=timeout,
             generate_asm=asm,
             program_args=args,
-            data_files=data_files,
+            data_files=all_files,
         )
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
