@@ -123,7 +123,7 @@ def _run_with_a100(
     )
 
 
-@app.function(image=cuda_image, gpu="H100", timeout=300)
+@app.function(image=cuda_image, gpu="H100!", timeout=300)
 def _run_with_h100(
     source_code: str,
     filename: str,
