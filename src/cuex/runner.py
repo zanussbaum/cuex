@@ -48,7 +48,7 @@ GPU_ARCH_FLAGS: dict[GPUType, list[str]] = {
     GPUType.L4: ["-gencode", "arch=compute_89,code=sm_89"],  # Ada Lovelace
     GPUType.A10G: ["-gencode", "arch=compute_86,code=sm_86"],  # Ampere
     GPUType.A100: ["-gencode", "arch=compute_80,code=sm_80"],  # Ampere
-    GPUType.H100: ["-gencode", "arch=compute_90,code=sm_90"],  # Hopper
+    GPUType.H100: ["-gencode", "arch=compute_90a,code=sm_90a"],  # Hopper (90a for wgmma/TMA)
     GPUType.B200: ["-gencode", "arch=compute_100a,code=sm_100a"],  # Blackwell (100a for tcgen05)
 }
 
