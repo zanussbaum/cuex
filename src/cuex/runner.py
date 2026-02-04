@@ -165,8 +165,11 @@ def _run_with_cpu(
     )
 
 
-def detect_cuda_libraries(source_code: str) -> list[str]:
-    """Auto-detect required CUDA libraries based on #include directives."""
+def detect_cuda_libraries(source_code: str, data_files: dict[str, bytes] | None = None) -> list[str]:
+    """Auto-detect required CUDA libraries based on #include directives.
+
+    Scans the main source code and any included header files (data_files).
+    """
     library_map = {
         "cuda.h": "-lcuda",  # CUDA driver API (TMA, etc.)
         "cublas_v2.h": "-lcublas",
@@ -179,11 +182,21 @@ def detect_cuda_libraries(source_code: str) -> list[str]:
         "cusolverDn.h": "-lcusolver",
     }
 
+    # Collect all source text to scan (main file + headers)
+    all_sources = [source_code]
+    if data_files:
+        for content in data_files.values():
+            try:
+                all_sources.append(content.decode("utf-8"))
+            except UnicodeDecodeError:
+                pass  # Skip binary files
+
     libs = []
-    for header, lib_flag in library_map.items():
-        has_include = f"#include <{header}>" in source_code or f'#include "{header}"' in source_code
-        if has_include and lib_flag not in libs:
-            libs.append(lib_flag)
+    for source in all_sources:
+        for header, lib_flag in library_map.items():
+            has_include = f"#include <{header}>" in source or f'#include "{header}"' in source
+            if has_include and lib_flag not in libs:
+                libs.append(lib_flag)
     return libs
 
 
@@ -221,8 +234,8 @@ def _compile_and_run_impl(
         is_cuda = filename.endswith(".cu")
 
         if is_cuda:
-            # Auto-detect required CUDA libraries
-            cuda_libs = detect_cuda_libraries(source_code)
+            # Auto-detect required CUDA libraries (scan main file + headers)
+            cuda_libs = detect_cuda_libraries(source_code, data_files)
 
             # Check if CUTLASS headers are used
             uses_cutlass = any(
