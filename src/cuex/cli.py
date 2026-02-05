@@ -210,6 +210,12 @@ def run(
         "-d",
         help="Glob pattern for data files to upload (can be specified multiple times)",
     ),
+    cflags: list[str] = typer.Option(
+        None,
+        "--cflags",
+        "-c",
+        help="Extra compiler flags (can be specified multiple times, e.g. --cflags=-DDEBUG --cflags=-Wno-deprecated)",
+    ),
 ) -> None:
     """Compile and run a CUDA/C++ source file on remote GPU infrastructure."""
     # Validate file extension
@@ -262,6 +268,8 @@ def run(
         )
         for rel_path in sorted(data_files.keys()):
             console.print(f"  [dim]{rel_path}[/dim]")
+    if cflags:
+        console.print(f"[blue]Extra cflags:[/blue] {' '.join(cflags)}")
     console.print()
 
     # Filter out the "--" separator if present
@@ -278,6 +286,9 @@ def run(
     if data:
         for pattern in data:
             cmd_parts.extend(["--data", pattern])
+    if cflags:
+        for flag in cflags:
+            cmd_parts.extend(["--cflags", flag])
     cmd_parts.append(str(source_file))
     if args:
         cmd_parts.append("--")
@@ -294,6 +305,7 @@ def run(
             generate_asm=asm,
             program_args=args,
             data_files=all_files,
+            extra_compile_flags=cflags,
         )
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
