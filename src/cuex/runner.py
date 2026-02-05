@@ -74,10 +74,11 @@ def _run_with_t4(
     generate_asm: bool,
     program_args: list[str],
     data_files: dict[str, bytes],
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run code on T4 GPU."""
     return _compile_and_run_impl(
-        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.T4]
+        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.T4], extra_compile_flags
     )
 
 
@@ -88,10 +89,11 @@ def _run_with_l4(
     generate_asm: bool,
     program_args: list[str],
     data_files: dict[str, bytes],
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run code on L4 GPU."""
     return _compile_and_run_impl(
-        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.L4]
+        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.L4], extra_compile_flags
     )
 
 
@@ -102,10 +104,11 @@ def _run_with_a10g(
     generate_asm: bool,
     program_args: list[str],
     data_files: dict[str, bytes],
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run code on A10G GPU."""
     return _compile_and_run_impl(
-        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.A10G]
+        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.A10G], extra_compile_flags
     )
 
 
@@ -116,10 +119,11 @@ def _run_with_a100(
     generate_asm: bool,
     program_args: list[str],
     data_files: dict[str, bytes],
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run code on A100 GPU."""
     return _compile_and_run_impl(
-        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.A100]
+        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.A100], extra_compile_flags
     )
 
 
@@ -130,10 +134,11 @@ def _run_with_h100(
     generate_asm: bool,
     program_args: list[str],
     data_files: dict[str, bytes],
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run code on H100 GPU."""
     return _compile_and_run_impl(
-        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.H100]
+        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.H100], extra_compile_flags
     )
 
 
@@ -144,10 +149,11 @@ def _run_with_b200(
     generate_asm: bool,
     program_args: list[str],
     data_files: dict[str, bytes],
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run code on B200 GPU."""
     return _compile_and_run_impl(
-        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.B200]
+        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.B200], extra_compile_flags
     )
 
 
@@ -158,10 +164,11 @@ def _run_with_cpu(
     generate_asm: bool,
     program_args: list[str],
     data_files: dict[str, bytes],
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run code without GPU (CPU only)."""
     return _compile_and_run_impl(
-        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.NONE]
+        source_code, filename, generate_asm, program_args, data_files, GPU_ARCH_FLAGS[GPUType.NONE], extra_compile_flags
     )
 
 
@@ -207,6 +214,7 @@ def _compile_and_run_impl(
     program_args: list[str],
     data_files: dict[str, bytes],
     arch_flags: list[str] | None = None,
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Implementation of compile and run logic (runs inside Modal container)."""
     from rich.console import Console
@@ -262,6 +270,8 @@ def _compile_and_run_impl(
 
             if arch_flags:
                 compile_cmd.extend(arch_flags)
+            if extra_compile_flags:
+                compile_cmd.extend(extra_compile_flags)
             compile_cmd.extend(["-o", str(binary_path), str(source_path)])
             compile_cmd.extend(cuda_libs)
 
@@ -280,6 +290,8 @@ def _compile_and_run_impl(
                 ])
             if arch_flags:
                 asm_cmd.extend(arch_flags)
+            if extra_compile_flags:
+                asm_cmd.extend(extra_compile_flags)
             asm_cmd.extend(["-o", str(tmppath / "program.ptx"), str(source_path)])
         else:
             compile_cmd = [
@@ -387,6 +399,7 @@ def compile_and_run(
     generate_asm: bool = False,
     program_args: list[str] | None = None,
     data_files: dict[str, bytes] | None = None,
+    extra_compile_flags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Compile and run code on remote GPU infrastructure.
 
@@ -398,6 +411,7 @@ def compile_and_run(
         generate_asm: Whether to generate assembly output.
         program_args: Arguments to pass to the compiled program.
         data_files: Dict of relative path -> bytes for data files to upload.
+        extra_compile_flags: Additional flags to pass to the compiler.
 
     Returns:
         A dictionary containing:
@@ -427,7 +441,7 @@ def compile_and_run(
     # Call the Modal function
     with modal.enable_output(), app.run():
         result = run_func.remote(
-            source_code, filename, generate_asm, program_args or [], data_files or {}
+            source_code, filename, generate_asm, program_args or [], data_files or {}, extra_compile_flags
         )
 
     result["job_id"] = job_id
